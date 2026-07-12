@@ -25,6 +25,11 @@ static CompleteInitFn g_origCompleteInit = nullptr;
 
 void __fastcall Hooked_CompleteInit(void* pThis)
 {
+    // Before CompleteInit runs scripts/main.lua + each mod's scripts/mods/<modid>.lua
+    // (0x180BF3B12 / 0x180BF3B72): plugins publish Lua globals here.
+    spdlog::info("PreDataLoaded");
+    PluginManager::Dispatch(KCSE::kPluginHandle_KCSE, KCSE::IMessagingInterface::kMessage_PreDataLoaded, nullptr, 0, nullptr);
+
     g_origCompleteInit(pThis);
     spdlog::info("DataLoaded");
     PluginManager::Dispatch(KCSE::kPluginHandle_KCSE, KCSE::IMessagingInterface::kMessage_DataLoaded, nullptr, 0, nullptr);

@@ -45,7 +45,7 @@ Plugins are DLLs placed in `mods/<modname>/KCSE/Plugins/` or `KCSE/Plugins/`.
 ## Notes
 
 - KCSE auto-calls `KCSE::Init()` when using the `KCSE_PLUGIN_LOAD` macro.
-- Available lifecycle messages: `DataLoaded`, `LoadGame`, `SaveGame`, `NewGame`, `AllPluginsLoaded`.
+- Available lifecycle messages: `PreDataLoaded` (before main.lua / mod init scripts — publish Lua globals here), `DataLoaded`, `LoadGame`, `SaveGame`, `NewGame`, `AllPluginsLoaded`.
 - Per-frame tasks via `KCSE::GetTaskInterface()->AddTask(fn)`.
 - Trampoline hooking via `KCSE::GetTrampoline()`.
 
