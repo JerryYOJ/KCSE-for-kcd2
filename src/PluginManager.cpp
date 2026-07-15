@@ -1,6 +1,8 @@
 #include "PluginManager.h"
+#include "Interfaces.h"
 #include <Windows.h>
 #include <filesystem>
+#include <memory>
 #include <mutex>
 #include <spdlog/spdlog.h>
 
@@ -24,12 +26,12 @@ struct LoadedPlugin {
     KCSE::PluginInfo              info{};
     bool                        loaded = false;
     uint32_t                    errorCode = 0;
+    std::unique_ptr<KCSEInterfaceImpl> kcseInterface;  // bound to `handle`; kept alive for the plugin's whole lifetime (it caches KCSE::g_kcse/g_messaging from this at load time, for use from callbacks fired long after)
 };
 
 static std::vector<LoadedPlugin>                s_plugins;
 static std::vector<std::vector<PluginListener>> s_listeners;
 static std::mutex                               s_messagingLock;
-static PluginHandle                             s_currentPluginHandle = KCSE::kPluginHandle_Invalid;
 static PluginHandle                             s_nextHandle = 1;
 
 extern uint32_t g_kcseVersion;
@@ -107,9 +109,6 @@ const KCSE::PluginInfo* GetPluginInfo(const char* name)
             return &p.info;
     return nullptr;
 }
-
-PluginHandle GetCurrentPluginHandle() { return s_currentPluginHandle; }
-void SetCurrentPluginHandle(PluginHandle handle) { s_currentPluginHandle = handle; }
 
 static void ScanDirectory(const fs::path& dir)
 {
@@ -205,7 +204,7 @@ bool Init()
     return true;
 }
 
-void LoadAll(const KCSE::IKCSEInterface* kcseInterface)
+void LoadAll()
 {
     for (auto& plugin : s_plugins) {
         plugin.loadFn = reinterpret_cast<KCSE::PluginLoadFn>(
@@ -216,10 +215,14 @@ void LoadAll(const KCSE::IKCSEInterface* kcseInterface)
             continue;
         }
 
-        s_currentPluginHandle = plugin.handle;
+        // Bound to plugin.handle at construction -- see Interfaces.h. The plugin
+        // caches this pointer (and derived interfaces from it) at load time and may
+        // call through it from callbacks fired long after load returns, so it must
+        // outlive the load call; owned by the LoadedPlugin entry for that reason.
+        plugin.kcseInterface = std::make_unique<KCSEInterfaceImpl>(plugin.handle);
+
         DWORD exCode = 0;
-        plugin.loaded = SafeCallPluginLoad(plugin.loadFn, kcseInterface, &exCode);
-        s_currentPluginHandle = KCSE::kPluginHandle_Invalid;
+        plugin.loaded = SafeCallPluginLoad(plugin.loadFn, plugin.kcseInterface.get(), &exCode);
 
         if (exCode) {
             spdlog::error("{} crashed during load (exception 0x{:08X})", plugin.name, exCode);

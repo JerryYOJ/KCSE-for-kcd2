@@ -1,5 +1,4 @@
 #include "dll_proxy/dinput8_proxy.h"
-#include "Interfaces.h"
 #include "PluginManager.h"
 #include "EventDispatcher.h"
 #include "TaskInterface.h"
@@ -74,7 +73,7 @@ static void MainThread(HMODULE)
     EventDispatcher::Install();
 
     PluginManager::Init();
-    PluginManager::LoadAll(&g_kcseInterface);
+    PluginManager::LoadAll();
     PluginManager::DispatchPostLoad();
 
     spdlog::info("Ready.");

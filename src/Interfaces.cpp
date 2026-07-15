@@ -5,25 +5,23 @@
 extern uint32_t g_kcseVersion;
 extern uint32_t g_gameVersion;
 
-MessagingInterface  g_messagingInterface;
 TaskInterfaceImpl   g_taskInterface;
-KCSEInterfaceImpl   g_kcseInterface;
 
 // ---- Messaging ----
 
 bool MessagingInterface::RegisterListener(EventCallback handler)
 {
-    return PluginManager::RegisterListener(PluginManager::GetCurrentPluginHandle(), "KCSE", handler);
+    return PluginManager::RegisterListener(m_owner, "KCSE", handler);
 }
 
 bool MessagingInterface::RegisterListener(const char* sender, EventCallback handler)
 {
-    return PluginManager::RegisterListener(PluginManager::GetCurrentPluginHandle(), sender, handler);
+    return PluginManager::RegisterListener(m_owner, sender, handler);
 }
 
 bool MessagingInterface::Dispatch(uint32_t messageType, void* data, uint32_t dataLen, const char* receiver)
 {
-    return PluginManager::Dispatch(PluginManager::GetCurrentPluginHandle(), messageType, data, dataLen, receiver);
+    return PluginManager::Dispatch(m_owner, messageType, data, dataLen, receiver);
 }
 
 // ---- Task ----
@@ -39,11 +37,6 @@ uint32_t KCSEInterfaceImpl::GetKCSEVersion() const  { return g_kcseVersion; }
 uint32_t KCSEInterfaceImpl::GetGameVersion() const   { return g_gameVersion; }
 uint32_t KCSEInterfaceImpl::GetReleaseIndex() const  { return g_kcseVersion; }
 
-PluginHandle KCSEInterfaceImpl::GetPluginHandle() const
-{
-    return PluginManager::GetCurrentPluginHandle();
-}
-
 const KCSE::PluginInfo* KCSEInterfaceImpl::GetPluginInfo(const char* name) const
 {
     return PluginManager::GetPluginInfo(name);
@@ -52,7 +45,7 @@ const KCSE::PluginInfo* KCSEInterfaceImpl::GetPluginInfo(const char* name) const
 void* KCSEInterfaceImpl::QueryInterface(uint32_t id) const
 {
     switch (id) {
-    case KCSE::kInterface_Messaging: return &g_messagingInterface;
+    case KCSE::kInterface_Messaging: return const_cast<MessagingInterface*>(&m_messaging);
     case KCSE::kInterface_Task:      return &g_taskInterface;
     default:                         return nullptr;
     }
