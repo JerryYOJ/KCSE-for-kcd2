@@ -12,11 +12,16 @@
 static constexpr std::size_t kSlot_CompleteInit  = 8;    // DataLoaded one-shot (0x180BF3808: loads main.lua)
 static constexpr std::size_t kSlot_OnActionEvent = 120;  // OnActionEvent broadcaster (sub_180668D48)
 
-// WHGame.dll call sites to redirect (image-relative RVAs). Both mirror KCD1: hook the
-// (manager, message) dispatch call, fire the plugin event, then call the original.
-static constexpr std::size_t kCall_CreateSaveGame  = 0xFC334F;   // commitQueuedSave -> CreateSaveGame
-static constexpr std::size_t kCall_NewGameDispatch = 0x194FF50;  // PrepareNewGame -> module-message broadcast
-                                                                 // of C_NewGamePrepareMessage (id 48)
+// WHGame.dll call sites to redirect, expressed as (containing-function address-library
+// id, byte offset) -- a raw mid-function RVA isn't itself in the address library, only
+// function starts are (offset is build-invariant: byte-identical code). Both mirror
+// KCD1: hook the (manager, message) dispatch call, fire the plugin event, then call
+// the original.
+static constexpr std::size_t    kFunc_CreateSaveGame   = 86408;   // commitQueuedSave
+static constexpr std::ptrdiff_t kOff_CreateSaveGame    = 0x5F;    // -> CreateSaveGame call
+static constexpr std::size_t    kFunc_NewGameDispatch  = 147899;  // PrepareNewGame
+static constexpr std::ptrdiff_t kOff_NewGameDispatch   = 0x68;    // -> module-message broadcast
+                                                                   // of C_NewGamePrepareMessage (id 48)
 
 // ---- CompleteInit vtable hook (DataLoaded, one-shot) ----
 
@@ -94,10 +99,10 @@ void Install()
         fwVtbl.write_vfunc(kSlot_OnActionEvent, Hooked_OnActionEvent));
 
     g_origCreateSaveGame = reinterpret_cast<CreateSaveGameFn>(
-        REL::Relocation<>{ REL::Offset(kCall_CreateSaveGame) }.write_call<5>(Hooked_CreateSaveGame));
+        REL::Relocation<>{ REL::ID(kFunc_CreateSaveGame), kOff_CreateSaveGame }.write_call<5>(Hooked_CreateSaveGame));
 
     g_origNewGameDispatch = reinterpret_cast<DispatchMessageFn>(
-        REL::Relocation<>{ REL::Offset(kCall_NewGameDispatch) }.write_call<5>(Hooked_NewGameDispatch));
+        REL::Relocation<>{ REL::ID(kFunc_NewGameDispatch), kOff_NewGameDispatch }.write_call<5>(Hooked_NewGameDispatch));
 
     spdlog::info("Hooks installed");
 }
