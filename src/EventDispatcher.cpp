@@ -3,6 +3,7 @@
 #include "KCSE/KCSEAPI.h"
 #include "KCSE/Trampoline.h"
 #include "Offsets/Offsets.h"
+#include "crysystem/CCryAction.h"
 #include "REL.h"
 #include <cstdint>
 #include <Windows.h>
@@ -90,7 +91,7 @@ namespace EventDispatcher {
 
 void Install()
 {
-    auto* pFramework = Offsets::GetCCryAction();
+    auto* pFramework = CCryAction::GetInstance();
 
     REL::Relocation<> fwVtbl{ *reinterpret_cast<std::uintptr_t*>(pFramework) };
     g_origCompleteInit = reinterpret_cast<CompleteInitFn>(
@@ -109,7 +110,7 @@ void Install()
 
 void Remove()
 {
-    auto* pFramework = Offsets::GetCCryAction();
+    auto* pFramework = CCryAction::GetInstance();
     if (pFramework) {
         REL::Relocation<> fwVtbl{ *reinterpret_cast<std::uintptr_t*>(pFramework) };
         if (g_origCompleteInit)

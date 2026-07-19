@@ -1,5 +1,6 @@
 #include "TaskInterface.h"
 #include "Offsets/Offsets.h"
+#include "crysystem/CCryAction.h"
 #include "REL.h"
 
 static std::mutex          s_taskLock;
@@ -42,14 +43,14 @@ static constexpr std::size_t kSlot_PostUpdate = 11;
 
 void InstallHook()
 {
-    auto* pFramework = Offsets::GetCCryAction();
+    auto* pFramework = CCryAction::GetInstance();
     g_origPostUpdate = reinterpret_cast<PostUpdateFn>(
         REL::Relocation<>{ *reinterpret_cast<std::uintptr_t*>(pFramework) }.write_vfunc(kSlot_PostUpdate, Hooked_PostUpdate));
 }
 
 void RemoveHook()
 {
-    auto* pFramework = Offsets::GetCCryAction();
+    auto* pFramework = CCryAction::GetInstance();
     if (pFramework && g_origPostUpdate)
         REL::Relocation<>{ *reinterpret_cast<std::uintptr_t*>(pFramework) }.write_vfunc(kSlot_PostUpdate, g_origPostUpdate);
 }

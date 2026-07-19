@@ -4,6 +4,7 @@
 #include "TaskInterface.h"
 #include "KCSE/Trampoline.h"
 #include "Offsets/Offsets.h"
+#include "crysystem/CCryAction.h"
 #include "REL.h"
 #include <Windows.h>
 #include <string>
@@ -65,7 +66,7 @@ static void MainThread(HMODULE)
     spdlog::info("KCSE v{} | {} | version {} | build {} | ts 0x{:08X}",
         g_kcseVersion, REL::to_string(mod.distribution()), rel, build, mod.timestamp());
 
-    while (!Offsets::GetCCryAction())
+    while (!CCryAction::GetInstance())
         Sleep(100);
 
     KCSE::AllocTrampoline(1 << 12);
