@@ -40,7 +40,7 @@ KCSE_PLUGIN_LOAD(kcse)
 }
 ```
 
-Plugins are DLLs placed in `mods/<modname>/KCSE/Plugins/` or `KCSE/Plugins/`.
+Plugins are DLLs placed in `mods/<modname>/KCSE/Plugins/`, a subscribed Steam Workshop item's `KCSE/Plugins/`, or `KCSE/Plugins/`.
 
 ## Notes
 

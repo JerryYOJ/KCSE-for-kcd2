@@ -184,6 +184,82 @@ static void ScanDirectory(const fs::path& dir)
         spdlog::info("  No DLLs found in directory");
 }
 
+// Steam Workshop mods load in place from each subscribed item's install folder, which the game asks ISteamUGC for
+// (CryGamePlatformSteam). KCSE asks the same way, through the flat API of the steam_api64.dll the game has loaded;
+// the signatures are those of the game's Steamworks SDK, whose UGC interface is version 018.
+static void ScanWorkshop() {
+    using GetHSteamUserFn = int32_t (*)();
+    using SteamUGCFn = void *(*)();
+    using GetNumSubscribedItemsFn = uint32_t (*)(void *ugc);
+    using GetSubscribedItemsFn = uint32_t (*)(void *ugc, uint64_t *ids, uint32_t maxEntries);
+    using GetItemStateFn = uint32_t (*)(void *ugc, uint64_t id);
+    using GetItemInstallInfoFn =
+        bool (*)(void *ugc, uint64_t id, uint64_t *sizeOnDisk, char *folder, uint32_t folderSize, uint32_t *timestamp);
+    using ReleaseCurrentThreadMemoryFn = void (*)();
+
+    HMODULE steamApi = GetModuleHandleW(L"steam_api64.dll");
+    if (!steamApi) {
+        spdlog::info("No Steam API loaded, skipping Workshop items");
+        return;
+    }
+
+    auto getUser = reinterpret_cast<GetHSteamUserFn>(GetProcAddress(steamApi, "SteamAPI_GetHSteamUser"));
+    auto getUgc = reinterpret_cast<SteamUGCFn>(GetProcAddress(steamApi, "SteamAPI_SteamUGC_v018"));
+    auto getCount =
+        reinterpret_cast<GetNumSubscribedItemsFn>(GetProcAddress(steamApi, "SteamAPI_ISteamUGC_GetNumSubscribedItems"));
+    auto getItems =
+        reinterpret_cast<GetSubscribedItemsFn>(GetProcAddress(steamApi, "SteamAPI_ISteamUGC_GetSubscribedItems"));
+    auto getState = reinterpret_cast<GetItemStateFn>(GetProcAddress(steamApi, "SteamAPI_ISteamUGC_GetItemState"));
+    auto getInstallInfo =
+        reinterpret_cast<GetItemInstallInfoFn>(GetProcAddress(steamApi, "SteamAPI_ISteamUGC_GetItemInstallInfo"));
+    auto releaseThreadMemory =
+        reinterpret_cast<ReleaseCurrentThreadMemoryFn>(GetProcAddress(steamApi, "SteamAPI_ReleaseCurrentThreadMemory"));
+    if (!getUser || !getUgc || !getCount || !getItems || !getState || !getInstallInfo || !releaseThreadMemory) {
+        spdlog::warn("Steam API has no ISteamUGC v018 flat calls, skipping Workshop items");
+        return;
+    }
+
+    // KCSE starts as soon as CCryAction exists, before the engine's GamePlatform plugin calls SteamAPI_Init. The user
+    // handle is the last thing SteamAPI_Init sets, so once it is non-zero the UGC interface can be had.
+    constexpr DWORD kSteamWaitMs = 10000;
+    void *ugc = nullptr;
+    for (DWORD waited = 0;; waited += 100) {
+        if (getUser())
+            ugc = getUgc();
+        if (ugc)
+            break;
+        if (waited >= kSteamWaitMs) {
+            spdlog::warn("Steam did not start within {} ms, skipping Workshop items", kSteamWaitMs);
+            return;
+        }
+        Sleep(100);
+    }
+
+    constexpr uint32_t kItemStateInstalled = 4;
+    std::vector<uint64_t> items(getCount(ugc));
+    items.resize(getItems(ugc, items.data(), static_cast<uint32_t>(items.size())));
+    spdlog::info("Searching {} subscribed Workshop items", items.size());
+    for (auto id : items) {
+        if (!(getState(ugc, id) & kItemStateInstalled)) {
+            spdlog::info("  Workshop item {} is not installed, skipping", id);
+            continue;
+        }
+        uint64_t sizeOnDisk = 0;
+        uint32_t timestamp = 0;
+        char folder[1024]{};
+        if (!getInstallInfo(ugc, id, &sizeOnDisk, folder, sizeof(folder), &timestamp)) {
+            spdlog::warn("  Workshop item {} has no install folder, skipping", id);
+            continue;
+        }
+        spdlog::info("  Workshop item {}: {}", id, folder);
+        // Steam returns UTF-8 paths, not the ANSI code page a plain fs::path(const char*) assumes.
+        ScanDirectory(fs::u8path(folder) / "KCSE" / "Plugins");
+    }
+
+    // Steam keeps per-thread memory for calls made off the main thread until it is released.
+    releaseThreadMemory();
+}
+
 bool Init()
 {
     s_listeners.resize(1);
@@ -207,6 +283,8 @@ bool Init()
     } else {
         spdlog::info("No mods directory at {}", modsDir.string());
     }
+
+    ScanWorkshop();
 
     ScanDirectory(gameRoot / "KCSE" / "Plugins");
 
